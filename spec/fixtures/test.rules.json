@@ -1,0 +1,15 @@
+{
+  "cisco_asa": ["hostname", "contains", "-asa-"],
+  "windows": [
+    "or", [
+      ["hostname", "contains", "-sql-"],
+      ["hostname", "contains", "-dc-"]]],
+  "bigip": [
+    "and", [
+      ["hostname", "contains", "-bigip-"],
+      ["not", ["message", "contains", "elephant"]]]],
+  "web_servers": [
+    "and", [
+      ["hostname", "starts_with", "web"],
+      ["program", "eq", "httpd"]]]
+}
