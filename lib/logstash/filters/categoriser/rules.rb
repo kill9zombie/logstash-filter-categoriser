@@ -5,21 +5,56 @@ require 'json'
 
 class LogStash::Filters::Categoriser::RulesError < StandardError; end
 
+# This class loads the rules file.
+#
+#
 class LogStash::Filters::Categoriser::Rules
 
   def initialize(logger)
     @logger = logger
   end
 
+  # Returns a hash of Procs that can be used to determine
+  # the device's category.
+  #
+  # For example, given a rules file something like this:
+  #
+  # {
+  #   "one": ["hostname", "contains", "one"],
+  #   "two": ["or", [
+  #     ["hostname", "eq", "a"],
+  #     ["message", "eq", "b"]
+  #   ]]
+  # }
+  #
+  # This method would return a hash:
+  #
+  #   {"one" => Proc, "two" => Proc}
+  #
+  # We can then pass "event" into one of the Procs
+  # and they'll return true or false, for example:
+  #
+  #  matched_type = @rules.find do |key, matcher|
+  #    matcher.call(event)
+  #  end
+  #
+  # @rules is the "key" => Proc hash above.  "matcher"
+  # is the Proc.
+  #
+  #
   def read_config(filename)
-    conf = JSON.load(File.read(filename))
+    conf = if filename.respond_to?(:read)
+             JSON.load(filename)
+           else
+             JSON.load(File.read(filename))
+           end
+
     load_config(conf)
   end
 
-  # Returns a hash:
+  # Returns a hash, ie:
   #   {"cisco_asa_firewall" => Proc}
   #
-  # So
   def load_config(config)
     config.keys.reduce({}) do |acc, key|
       acc.merge({key => parse_checks(config[key])})
@@ -27,15 +62,18 @@ class LogStash::Filters::Categoriser::Rules
   end
 
   # +checks+::
+  #   Example:
+  #
   #   ["and", [
   #     ["hostname", "contains", "-pix-"],
   #     ["hostname", "contains", "-fwsm-"]
   #   ]]
+  #
   # Returns a proc that you can pass 'event' into
   # The proc will return true or false.
-  def parse_checks(checks)
+  private def parse_checks(checks)
     if !checks.is_a?(Array)
-      raise ConfigError, "checks should be an array"
+      raise LogStash::Filters::Categoriser::RulesError, "Invalid config: #{checks.dump} Checks should be an array, " + 'ie: ["hostname", "starts_with", "web"]'
     end
 
     case checks.first
@@ -76,19 +114,20 @@ class LogStash::Filters::Categoriser::Rules
   #
   # .. where the format is:
   #
-  #   [<field name>, <contains | regex>, <argument>]
+  #   [<field name>, <contains | eq etc>, <argument>]
   #
   # Returns a proc that can be used later to determine
   # if the check is true or false, ie:
   #
   # asa_check = load_check(["hostname", "contains", "-asa-"])
-  # asa_check.(event)
+  # asa_check.call(event)
   #
-  def load_check(check)
+  private def load_check(check)
     tag = "#{self.class}\##{__method__}"
     if check.length == 3
       if check.all? {|x| x.is_a?(String) }
         (check_field, check_command, check_argument) = check
+
 
         case check_command
         when "equals", "eql", "eq"
@@ -128,12 +167,13 @@ class LogStash::Filters::Categoriser::Rules
   end
 
   private def generic_check_ok?(check, check_field, field_value)
+    tag = "#{self.class}\##{__method__}"
     if field_value.nil?
-      @logger.warn("vf_device_type - Could not read missing field, check #{check} returns false.", :field => check_field)
+      @logger.info(tag) { "Could not read missing field \"#{check_field}\", check #{check.dump} returns false." }
       false
     else
       if !field_value.is_a?(String)
-        @logger.warn("vf_device_type - Field must be a string, check #{check} returns false (field was a(n) #{field_value.class}).", :field => check_field)
+        @logger.info(tag) { "Field must be a string, check #{check} returns false (field was a(n) #{field_value.class})." }
         false
       else
         true
