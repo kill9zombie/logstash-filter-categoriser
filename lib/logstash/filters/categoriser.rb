@@ -3,29 +3,46 @@
 require "logstash/filters/base"
 require "logstash/namespace"
 
-# This example filter will replace the contents of the default
-# message field with whatever you specify in the configuration.
 #
-# It is only intended to be used as an example.
+# A way to categorise devices based on existing fields.
 #
-# If we match more than one filter, print a warning and send
-# to the unknown device type.
+# In my scenario I have multiple types of devices all
+# sending syslog logs.  I use this to quickly separate
+# them in order to run a pipeline for each device type.
+#
+# Example config:
+#
+#   filter {
+#     categoriser {
+#       rules_file => "/etc/logstash/device_type.rules.json"
+#       target => "device_type"
+#       default_category => "unknown"
+#     }
+#   }
+#
+# .. with an example rules file:
+#
+# {
+#   "cisco_asa_firewall": ["hostname", "contains", "-asa-"],
+#   "cisco_pix_fwsm_firewall": [
+#     "or", [
+#       ["hostname", "contains", "-pix-"],
+#       ["hostname", "contains", "-fwsm-"]]],
+#   "web_servers": ["hostname", "starts_with", "web"]
+# }
+#
+# This would replace the contents of the "device_type" field
+# with the category in the rules file, ie "cisco_asa_firewall".
+# If we don't match any rules then "device_type" will be set
+# to "unknown".
+#
 class LogStash::Filters::Categoriser < LogStash::Filters::Base
 
-  # Setting the config_name here is required. This is how you
-  # configure this filter from your Logstash config.
-  #
-  # filter {
-  #   example {
-  #     message => "My message..."
-  #   }
-  # }
-  #
   config_name "categoriser"
 
   require 'logstash/filters/categoriser/rules'
 
-  # The config filename, ie:
+  # The rules filename, ie:
   #   filter {
   #     categoriser {
   #       rules_file => "/etc/logstash/device_type.rules.json"

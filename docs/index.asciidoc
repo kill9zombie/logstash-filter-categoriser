@@ -1,4 +1,4 @@
-:plugin: example
+:plugin: categoriser
 :type: filter
 
 ///////////////////////////////////////////
@@ -14,45 +14,112 @@ END - GENERATED VARIABLES, DO NOT EDIT!
 
 [id="plugins-{type}s-{plugin}"]
 
-=== Example filter plugin
+=== Categoriser filter plugin
 
 include::{include_path}/plugin_header.asciidoc[]
 
 ==== Description
 
-ADD DESCRIPTION HERE
+A way to categorise devices based on existing fields.
+
+In my scenario we have multiple types of devices all
+sending syslog logs.  I use this to quickly separate
+them in order to run a pipeline for each device type.
+
+==== Rules File
+
+We'll start with an example:
+
+[source,json]
+{
+  "cisco_asa_firewall": ["hostname", "contains", "-asa-"],
+  "cisco_pix_fwsm_firewall": [
+    "or", [
+      ["hostname", "contains", "-pix-"],
+      ["hostname", "contains", "-fwsm-"]]],
+  "web_servers": ["hostname", "starts_with", "web"],
+  "linux": ["not", ["hostname", "contains", "win"]]
+}
+
+The file is organised into `category:rule` sections.
+Each rule starts with a category name, then an array
+with the actual matching condition inside.  The first
+element can either be a logic modifier or the matcher
+itself.
+
+===== Logic
+
+Valid logic conditions:
+
+* and
+* or
+* not
+
+For example:
+
+[source,json]
+{
+  "category_one": ["and", [
+    ["message", "contains", "One"]
+    ["not", ["myfield", "eq", "2"]]
+  ]]
+}
+
+===== Matcher
+
+A matcher has three fields:
+
+[ <event_field>, <command>, <arguments> ]
+
+The `event_field` must exist in the event.  If it doesn't the matcher will evaluate to false.
+
+Valid commands:
+
+* equals, eq, eql
+* start_with, starts_with
+* end_with, ends_with
+* include, contains
+
+All operate on strings.
 
 [id="plugins-{type}s-{plugin}-options"]
-==== Example Filter Configuration Options
+==== Categoriser Filter Configuration Options
 
 This plugin supports the following configuration options plus the <<plugins-{type}s-{plugin}-common-options>> described later.
 
 [cols="<,<,<",options="header",]
 |=======================================================================
 |Setting |Input type|Required
-| <<plugins-{type}s-{plugin}-setting_name>> |{logstash-ref}/configuration-file-structure.html#boolean[boolean]|No
-| <<plugins-{type}s-{plugin}-another_setting_name>> |{logstash-ref}/configuration-file-structure.html#hash[hash]|No
+| <<plugins-{type}s-{plugin}-rules_file>> |{logstash-ref}/configuration-file-structure.html#boolean[boolean]|Yes
+| <<plugins-{type}s-{plugin}-target>> |{logstash-ref}/configuration-file-structure.html#hash[hash]|No
+| <<plugins-{type}s-{plugin}-default_category>> |{logstash-ref}/configuration-file-structure.html#hash[hash]|No
 |=======================================================================
 
 Also see <<plugins-{type}s-{plugin}-common-options>> for a list of options supported by all
 filter plugins.
 
-[id="plugins-{type}s-{plugin}-setting_name"]
-===== `setting_name` 
+[id="plugins-{type}s-{plugin}-rules_file"]
+===== `rules_file`
 
-  * Value type is {logstash-ref}/configuration-file-structure.html#boolean[boolean]
-  * Default value is `true`
+  * Value type is {logstash-ref}/configuration-file-structure.html#string[string]
 
-ADD DESCRIPTION HERE.
+An absolute path to the rules json file, ie: "/etc/logstash/device_type.rules.json"
 
-[id="plugins-{type}s-{plugin}-another_setting_name"]
-===== `another_setting_name` 
+[id="plugins-{type}s-{plugin}-target"]
+===== `target`
 
-  * Value type is <<hash,hash>>
-  * Default value is `{}`
+  * Value type is {logstash-ref}/configuration-file-structure.html#string[string]
+  * Default value is `category`
 
-ADD DESCRIPTION HERE.
+The name of the field to replace with the matched category name.
 
+[id="plugins-{type}s-{plugin}-default_category"]
+===== `default_category`
+
+  * Value type is {logstash-ref}/configuration-file-structure.html#string[string]
+  * Default value is `unknown`
+
+If we don't match any rules, what should we set the `target` field to?
 
 [id="plugins-{type}s-{plugin}-common-options"]
 include::{include_path}/{type}.asciidoc[]
